@@ -15,7 +15,7 @@
 package main
 
 import (
-	"au/cmd"
+	"../au/cmd"
 )
 
 func main() {

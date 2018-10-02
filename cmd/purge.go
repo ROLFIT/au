@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"regexp"
@@ -25,13 +26,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-)
-
-var (
-	user string
-	url  string
-	repo string
-	days uint
 )
 
 // purgeCmd represents the purge command
@@ -54,9 +48,9 @@ var purgeCmd = &cobra.Command{
 		bg := bgDate.UnixNano() / 1000000
 		fn := fnDate.UnixNano() / 1000000
 
-		sCandidatesUrl := fmt.Sprintf(sCandidatesUrlTemplate, url, bg, fn, repo)
-		fmt.Println(sCandidatesUrl)
-		req, err := http.NewRequest("GET", sCandidatesUrl, nil)
+		sCandidatesURL := fmt.Sprintf(sCandidatesURLTemplate, url, bg, fn, repo)
+		fmt.Println(sCandidatesURL)
+		req, err := http.NewRequest("GET", sCandidatesURL, nil)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -69,14 +63,21 @@ var purgeCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 		defer r.Body.Close()
-		fmt.Println(r.StatusCode)
+
+		fmt.Println("response Status:", r.Status)
+		if sr == 1 {
+			fmt.Println("response Headers:", r.Header)
+			body, _ := ioutil.ReadAll(r.Body)
+			fmt.Println("response Body:", string(body))
+		}
+
 		uris := struct {
 			Results []struct {
-				Uri     string
+				URI     string
 				Created time.Time
 			}
 		}{Results: []struct {
-			Uri     string
+			URI     string
 			Created time.Time
 		}{}}
 		if err := json.NewDecoder(r.Body).Decode(&uris); err != nil {
@@ -98,12 +99,12 @@ var purgeCmd = &cobra.Command{
 			if v.Created.Before(minDt) {
 				minDt = v.Created
 			}
-			delUri := strings.Replace(v.Uri, "/api/storage", "", 1)
-			if regExp.MatchString(delUri) {
-				delUri = regExp.FindString(delUri)
-				delUri = delUri[:len(delUri)-1]
-				if _, ok := folders[delUri]; !ok {
-					folders[delUri] = true
+			delURI := strings.Replace(v.URI, "/api/storage", "", 1)
+			if regExp.MatchString(delURI) {
+				delURI = regExp.FindString(delURI)
+				delURI = delURI[:len(delURI)-1]
+				if _, ok := folders[delURI]; !ok {
+					folders[delURI] = true
 				}
 			}
 		}
@@ -119,7 +120,7 @@ var purgeCmd = &cobra.Command{
 			}
 			defer respDel.Body.Close()
 			if respDel.StatusCode != 204 {
-				log.Fatal(errors.New(fmt.Sprintf("Invalid status code %d", respDel.StatusCode)))
+				log.Fatal(fmt.Errorf(fmt.Sprintf("Invalid status code %d", respDel.StatusCode)))
 			}
 			fmt.Println(k, "deleted")
 		}
@@ -139,10 +140,11 @@ func init() {
 	purgeCmd.PersistentFlags().StringVar(&url, "url", "", "Artifactory's url")
 	purgeCmd.PersistentFlags().StringVar(&repo, "repo", "", "Artifactory's repository name")
 	purgeCmd.PersistentFlags().UintVarP(&days, "days", "d", 7, "Number of days")
+	purgeCmd.PersistentFlags().UintVarP(&sr, "show_response", "r", 0, "Show data response")
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	// purgeCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
 
-const sCandidatesUrlTemplate = "%s/api/search/dates?dateFields=created,lastModified,lastDownloaded&from=%d&to=%d&repos=%s"
+const sCandidatesURLTemplate = "%s/api/search/dates?dateFields=created,lastModified,lastDownloaded&from=%d&to=%d&repos=%s"
